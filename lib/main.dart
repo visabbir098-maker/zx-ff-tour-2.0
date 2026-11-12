@@ -24,17 +24,17 @@ void main() async {
   try { await Firebase.initializeApp(); } catch(e) {}
   runApp(ZXFFTourApp());
 }
-
+}
 class ZXFFTourApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner: false, title: APP_NAME, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: mainBlack), home: AuthGate());
 }
-
+}
 class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(stream: FirebaseAuth.instance.authStateChanges(), builder: (c,s){ if(s.connectionState==ConnectionState.waiting) return Scaffold(body: Center(child: CircularProgressIndicator(color: goldColor))); if(s.hasData) return HomeScreen(); return LoginScreen(); });
 }
-
+}
 class LoginScreen extends StatefulWidget { @override _LoginScreenState createState()=>_LoginScreenState(); }
 class _LoginScreenState extends State<LoginScreen> {
   final emailCtrl=TextEditingController(), passCtrl=TextEditingController(), ffCtrl=TextEditingController();
@@ -53,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
   ])));
   Future<void> _auth() async { setState(()=>loading=true); try{ if(isLogin){ await FirebaseAuth.instance.signInWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); } else { var cred=await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({'email':emailCtrl.text.trim(),'ffName':ffCtrl.text.trim(),'balance':0,'zxId':'ZX${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}','createdAt':FieldValue.serverTimestamp()}); } }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"))); } setState(()=>loading=false); }
 }
-
+}
 class HomeScreen extends StatefulWidget { @override _HomeScreenState createState()=>_HomeScreenState(); }
 class _HomeScreenState extends State<HomeScreen> {
   String filter="ALL"; int tapCount=0; Map<String,dynamic>? userData; Set<String> joinedIds={};
@@ -76,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ])); }); }))),
       ]),
       bottomNavigationBar: BottomNavigationBar(backgroundColor: Color(0xFF111122), selectedItemColor: goldColor, unselectedItemColor: Colors.grey, type: BottomNavigationBarType.fixed, currentIndex:2, onTap:(i){ if(i==0||i==4) Navigator.push(context, MaterialPageRoute(builder: (_)=> AddMoneyScreen(balance: balance, onRefresh: _loadUser))); }, items:[ BottomNavigationBarItem(icon: Icon(Icons.diamond), label:"Topup"), BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label:"Results"), BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label:"Play"), BottomNavigationBarItem(icon: Icon(Icons.gamepad), label:"My Matches"), BottomNavigationBarItem(icon: Icon(Icons.person), label:"Profile")]),
-    );
+    ;
   }  
   void _adminLogin(BuildContext context){ TextEditingController p=TextEditingController(); showDialog(context: context, builder: (_)=> AlertDialog(backgroundColor: Color(0xFF1A1A2E), title: Text("Admin Login", style: TextStyle(color: goldColor)), content: TextField(controller: p, obscureText:true, decoration: InputDecoration(hintText:"Admin Password")), actions:[ TextButton(onPressed: ()=>Navigator.pop(context), child: Text("Cancel")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor), onPressed:(){ if(p.text==ADMIN_PASSWORD){ Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_)=> AdminPanel())); } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ভুল পাসওয়ার্ড!"))); } }, child: Text("Login", style: TextStyle(color: Colors.black))) ])); }
 }
