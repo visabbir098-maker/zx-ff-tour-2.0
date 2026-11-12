@@ -94,7 +94,33 @@ class _AddMoneyScreenState extends State<AddMoneyScreen> {
   ])));
   Widget _mCard(String n){ bool a=method==n; return GestureDetector(onTap: ()=>setState(()=>method=n), child: Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: a?neonPurple:Colors.white10, borderRadius: BorderRadius.circular(14), border: Border.all(color: a?goldColor:Colors.transparent)), child: Center(child: Text(n, style: TextStyle(fontWeight: FontWeight.bold, fontSize:18))))); }
   Future<void> _payNow() async { int amt=int.tryParse(amtCtrl.text)??0; if(amt<10){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("কমপক্ষে ১০ টাকা"))); return; } if(method=="bKash"){ var tRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/token/grant"), headers:{"Content-Type":"application/json","username":BKASH_USER,"password":BKASH_PASS}, body: jsonEncode({"app_key":BKASH_APP_KEY,"app_secret":BKASH_APP_SECRET})); if(tRes.statusCode!=200){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("bKash Merchant তথ্য ঠিক নাই। আগে Merchant বসাও।"))); return; } token=jsonDecode(tRes.body)['id_token']; var cRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/create"), headers:{"Content-Type":"application/json","Authorization":token!,"X-APP-Key":BKASH_APP_KEY}, body: jsonEncode({"mode":"0011","payerReference":FirebaseAuth.instance.currentUser!.uid,"callbackURL":"https://zxfftour.page.link/callback","amount":amt.toString(),"currency":"BDT","intent":"sale","merchantInvoiceNumber":"ZX${DateTime.now().millisecondsSinceEpoch}"})); if(cRes.statusCode!=200) return; var data=jsonDecode(cRes.body); Navigator.push(context, MaterialPageRoute(builder: (_)=> BkashWeb(url: data['bkashURL'], paymentID: data['paymentID'], token: token!, amt: amt, onDone: widget.onRefresh))); } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Nagad এখন Manual দিয়ে করো"))); } }
-  void _manual(){ TextEditingController trx=TextEditingController(); showDialog(context: context, builder: (_)=> AlertDialog(title: Text("Manual - $method"), content: Column(mainAxisSize: MainAxisSize.min, children:[ Text("1. $method অ্যাপ খুলো\n2. Send Money: $BKASH_MERCHANT_NUMBER\n3. Amount: ${amtCtrl.text}\n4. TrxID দাও"), SizedBox(height:12), TextField(controller: trx, decoration: InputDecoration(labelText:"TrxID"))]), actions:[ ElevatedButton(onPressed: () async { await FirebaseFirestore.instance.collection('manual_payments').add({'uid':FirebaseAuth.instance.currentUser!.uid,'amount':int.tryParse(amtCtrl.text)??0,'trxId':trx.text,'method':method,'status':'pending','time':FieldValue.serverTimestamp()}); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request গেছে! Admin Approve করলেই টাকা ঢুকবে।"))); }, child: Text("Submit")) ]))); }
+  void _manual(){
+    TextEditingController trx=TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text("Manual - $method"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("1. $method অ্যাপ খুলো\n2. Send Money: $BKASH_MERCHANT_NUMBER\n3. Amount: ${amtCtrl.text}\n4. TrxID দাও"),
+            SizedBox(height: 12),
+            TextField(controller: trx, decoration: InputDecoration(labelText: "TrxID")),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance.collection('manual_payments').add({'uid': FirebaseAuth.instance.currentUser!.uid, 'amount': int.tryParse(amtCtrl.text) ?? 0, 'trxId': trx.text, 'method': method, 'status': 'pending', 'time': FieldValue.serverTimestamp()});
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request গেছে! Admin Approve করলেই টাকা ঢুকবে।")));
+            },
+            child: Text("Submit"),
+          ),
+        ],
+      ),
+    );
+  }
 }
 class BkashWeb extends StatefulWidget { final String url, paymentID, token; final int amt; final VoidCallback onDone; BkashWeb({required this.url, required this.paymentID, required this.token, required this.amt, required this.onDone}); @override _BkashWebState createState()=>_BkashWebState(); }
 class _BkashWebState extends State<BkashWeb> { late WebViewController c; @override void initState(){ super.initState(); c=WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..setNavigationDelegate(NavigationDelegate(onPageFinished: (url) async { if(url.contains("callback")||url.contains("success")){ var eRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/execute"), headers:{"Content-Type":"application/json","Authorization":widget.token,"X-APP-Key":BKASH_APP_KEY}, body: jsonEncode({"paymentID":widget.paymentID})); if(eRes.statusCode==200 && jsonDecode(eRes.body)['statusCode']=="0000"){ var uid=FirebaseAuth.instance.currentUser!.uid; await FirebaseFirestore.instance.collection('users').doc(uid).update({'balance': FieldValue.increment(widget.amt)}); await FirebaseFirestore.instance.collection('payments').add({'uid':uid,'method':'bKash','amount':widget.amt,'trxId':jsonDecode(eRes.body)['trxID'],'status':'success','time':FieldValue.serverTimestamp()}); widget.onDone(); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ পেমেন্ট সফল! Wallet এ ৳${widget.amt} অ্যাড হয়ে গেছে।"))); } } }))..loadRequest(Uri.parse(widget.url)); } @override Widget build(BuildContext context)=>Scaffold(appBar: AppBar(title: Text("bKash Payment")), body: WebViewWidget(controller: c)); }
@@ -109,9 +135,42 @@ class AdminPanel extends StatelessWidget {
     StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return Column(children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; return ListTile(title: Text("${m['title']} - ${m['mode']}"), subtitle: Text("Fee ${m['entryFee']} | Prize ${m['prize']} | Slot ${m['joinedSlots']}/${m['totalSlots']}")); }).toList()); }),
   ]));
   Widget _btn(BuildContext ctx, String t, VoidCallback f)=>Padding(padding: EdgeInsets.only(bottom:10), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor, foregroundColor: Colors.black, padding: EdgeInsets.all(16)), onPressed: f, child: Text(t, style: TextStyle(fontWeight: FontWeight.bold))));
-  void _addMatch(BuildContext ctx){ String type="BR", title="", mode="Solo", time="Today 8:00 PM"; int fee=20, prize=500, kill=10, slots=48; showDialog(context: ctx, builder: (_)=> AlertDialog(title: Text("Add New Match"), content: SingleChildScrollView(child: Column(children:[ TextField(decoration: InputDecoration(labelText:"Title"), onChanged:(v)=>title=v), TextField(decoration: InputDecoration(labelText:"Type BR/CS/LW/CUSTOM"), onChanged:(v)=>type=v.toUpperCase()), TextField(decoration: InputDecoration(labelText:"Mode"), onChanged:(v)=>mode=v), TextField(decoration: InputDecoration(labelText:"Entry Fee"), keyboardType: TextInputType.number, onChanged:(v)=>fee=int.tryParse(v)??20), TextField(decoration: InputDecoration(labelText:"Prize"), keyboardType: TextInputType.number, onChanged:(v)=>prize=int.tryParse(v)??500), TextField(decoration: InputDecoration(labelText:"Per Kill"), keyboardType: TextInputType.number, onChanged:(v)=>kill=int.tryParse(v)??10), TextField(decoration: InputDecoration(labelText:"Total Slots"), keyboardType: TextInputType.number, onChanged:(v)=>slots=int.tryParse(v)??48), TextField(decoration: InputDecoration(labelText:"Time"), onChanged:(v)=>time=v), ])), actions:[ ElevatedButton(onPressed: () async { await FirebaseFirestore.instance.collection('matches').add({'title': title.isEmpty?"$type $mode":title,'type':type,'mode':mode,'entryFee':fee,'prize':prize,'perKill':kill,'totalSlots':slots,'joinedSlots':0,'time':time,'roomId':'','roomPass':'','isCancelled':false,'createdAt':FieldValue.serverTimestamp()}); Navigator.pop(ctx); ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Match অ্যাড হয়ে গেছে!"))); }, child: Text("Add Match")) ]))); }
+  void _addMatch(BuildContext ctx){
+    String type="BR", title="", mode="Solo", time="Today 8:00 PM";
+    int fee=20, prize=500, kill=10, slots=48;
+    showDialog(
+      context: ctx,
+      builder: (_) => AlertDialog(
+        title: Text("Add New Match"),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(decoration: InputDecoration(labelText:"Title"), onChanged:(v)=>title=v),
+              TextField(decoration: InputDecoration(labelText:"Type BR/CS/LW/CUSTOM"), onChanged:(v)=>type=v.toUpperCase()),
+              TextField(decoration: InputDecoration(labelText:"Mode"), onChanged:(v)=>mode=v),
+              TextField(decoration: InputDecoration(labelText:"Entry Fee"), keyboardType: TextInputType.number, onChanged:(v)=>fee=int.tryParse(v)??20),
+              TextField(decoration: InputDecoration(labelText:"Prize"), keyboardType: TextInputType.number, onChanged:(v)=>prize=int.tryParse(v)??500),
+              TextField(decoration: InputDecoration(labelText:"Per Kill"), keyboardType: TextInputType.number, onChanged:(v)=>kill=int.tryParse(v)??10),
+              TextField(decoration: InputDecoration(labelText:"Total Slots"), keyboardType: TextInputType.number, onChanged:(v)=>slots=int.tryParse(v)??48),
+              TextField(decoration: InputDecoration(labelText:"Time"), onChanged:(v)=>time=v),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance.collection('matches').add({'title': title.isEmpty?"$type $mode":title,'type':type,'mode':mode,'entryFee':fee,'prize':prize,'perKill':kill,'totalSlots':slots,'joinedSlots':0,'time':time,'roomId':'','roomPass':'','isCancelled':false,'createdAt':FieldValue.serverTimestamp()});
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Match অ্যাড হয়ে গেছে!")));
+            },
+            child: Text("Add Match"),
+          ),
+        ],
+      ),
+    );
+  }
   void _cancelMatch(BuildContext ctx){ showDialog(context: ctx, builder: (_)=> AlertDialog(title: Text("Cancel Match"), content: StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return Column(mainAxisSize: MainAxisSize.min, children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; return ListTile(title: Text("${m['title']}"), onTap: () async { await FirebaseFirestore.instance.collection('matches').doc(d.id).update({'isCancelled':true}); Navigator.pop(ctx); }); }).toList()); }))); }
   void _setRoom(BuildContext ctx){ showDialog(context: ctx, builder: (_)=> AlertDialog(title: Text("Room ID & Pass"), content: StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return SingleChildScrollView(child: Column(children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; var idC=TextEditingController(text: m['roomId']??''); var pC=TextEditingController(text: m['roomPass']??''); return ListTile(title: Text(m['title']), subtitle: Column(children:[ TextField(controller: idC, decoration: InputDecoration(labelText:"Room ID")), TextField(controller: pC, decoration: InputDecoration(labelText:"Password"))]), trailing: IconButton(icon: Icon(Icons.save), onPressed: () async { await FirebaseFirestore.instance.collection('matches').doc(d.id).update({'roomId':idC.text,'roomPass':pC.text}); Navigator.pop(ctx); })); }).toList())); }))); }
   void _givePrize(BuildContext ctx){ ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Prize coming soon"))); }
-  void _wallet(BuildContext ctx){ ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Wallet coming soon"))); }                                                                                                             
+  void _wallet(BuildContext ctx){ ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Wallet coming soon"))); }
 }
