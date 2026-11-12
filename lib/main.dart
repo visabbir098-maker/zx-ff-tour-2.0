@@ -77,10 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ]),
       bottomNavigationBar: BottomNavigationBar(backgroundColor: Color(0xFF111122), selectedItemColor: goldColor, unselectedItemColor: Colors.grey, type: BottomNavigationBarType.fixed, currentIndex:2, onTap:(i){ if(i==0||i==4) Navigator.push(context, MaterialPageRoute(builder: (_)=> AddMoneyScreen(balance: balance, onRefresh: _loadUser))); }, items:[ BottomNavigationBarItem(icon: Icon(Icons.diamond), label:"Topup"), BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label:"Results"), BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label:"Play"), BottomNavigationBarItem(icon: Icon(Icons.gamepad), label:"My Matches"), BottomNavigationBarItem(icon: Icon(Icons.person), label:"Profile")]),
     );
-  }
+  }  
   void _adminLogin(BuildContext context){ TextEditingController p=TextEditingController(); showDialog(context: context, builder: (_)=> AlertDialog(backgroundColor: Color(0xFF1A1A2E), title: Text("Admin Login", style: TextStyle(color: goldColor)), content: TextField(controller: p, obscureText:true, decoration: InputDecoration(hintText:"Admin Password")), actions:[ TextButton(onPressed: ()=>Navigator.pop(context), child: Text("Cancel")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor), onPressed:(){ if(p.text==ADMIN_PASSWORD){ Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_)=> AdminPanel())); } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ভুল পাসওয়ার্ড!"))); } }, child: Text("Login", style: TextStyle(color: Colors.black))) ])); }
 }
-
+}
 class AddMoneyScreen extends StatefulWidget { final int balance; final VoidCallback onRefresh; AddMoneyScreen({required this.balance, required this.onRefresh}); @override _AddMoneyScreenState createState()=>_AddMoneyScreenState(); }
 class _AddMoneyScreenState extends State<AddMoneyScreen> {
   TextEditingController amtCtrl=TextEditingController(); String method="bKash"; String? token;
