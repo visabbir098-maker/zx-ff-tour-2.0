@@ -6,12 +6,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 const mainBlack = Color(0xFF111111);
 const goldColor = Color(0xFFFFD700);
 
+bool firebaseReady = false;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+    await Firebase.initializeApp().timeout(const Duration(seconds: 10));
+    firebaseReady = true;
   } catch (e) {
     debugPrint("Firebase failed: $e");
+    firebaseReady = false;
   }
   runApp(const ZXFFTourApp());
 }
@@ -22,7 +26,9 @@ class ZXFFTourApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: mainBlack,
+      ),
       home: const AuthGate(),
     );
   }
@@ -32,11 +38,21 @@ class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
   Widget build(BuildContext context) {
+    // Firebase চালু না হলে আটকে থাকবে না, সরাসরি Login দেখাবে
+    if (!firebaseReady) {
+      return const LoginScreen(firebaseError: true);
+    }
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snap) {
+        if (snap.hasError) {
+          return const LoginScreen();
+        }
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            backgroundColor: mainBlack,
+            body: Center(child: CircularProgressIndicator(color: goldColor)),
+          );
         }
         if (snap.hasData) return const HomeScreen();
         return const LoginScreen();
@@ -46,7 +62,8 @@ class AuthGate extends StatelessWidget {
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool firebaseError;
+  const LoginScreen({super.key, this.firebaseError = false});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -62,33 +79,51 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: mainBlack,
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text("ZX", style: TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: goldColor)),
-            const SizedBox(height: 20),
-            if (isLogin) TextField(controller: ffCtrl, decoration: const InputDecoration(labelText: "FF Name")),
-            if (isLogin) const SizedBox(height: 12),
-            TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: "Email")),
-            const SizedBox(height: 12),
-            TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Password")),
-            const SizedBox(height: 20),
-            loading
-                ? const CircularProgressIndicator(color: goldColor)
-                : SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(onPressed: _auth, child: Text(isLogin ? "Login" : "Register")),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 80),
+              const Text("ZX", style: TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: goldColor)),
+              const SizedBox(height: 10),
+              if (widget.firebaseError)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  color: Colors.red.withOpacity(0.2),
+                  child: const Text(
+                    "Firebase Connect হয় নাই! নতুন google-services.json বসিয়ে আবার APK বানাও।",
+                    style: TextStyle(color: Colors.redAccent),
+                    textAlign: TextAlign.center,
                   ),
-            TextButton(onPressed: () => setState(() => isLogin = !isLogin), child: Text(isLogin ? "Create Account" : "Already have account? Login")),
-          ],
+                ),
+              const SizedBox(height: 20),
+              if (!isLogin) TextField(controller: ffCtrl, decoration: const InputDecoration(labelText: "FF Name")),
+              if (!isLogin) const SizedBox(height: 12),
+              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: "Email")),
+              const SizedBox(height: 12),
+              TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Password")),
+              const SizedBox(height: 20),
+              loading
+                  ? const CircularProgressIndicator(color: goldColor)
+                  : SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(onPressed: _auth, child: Text(isLogin ? "Login" : "Register")),
+                    ),
+              TextButton(onPressed: () => setState(() => isLogin = !isLogin), child: Text(isLogin ? "Create Account" : "Already have account? Login")),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Future<void> _auth() async {
+    if (!firebaseReady) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Firebase চালু হয় নাই, নতুন APK বানাও")));
+      return;
+    }
     setState(() => loading = true);
     try {
       if (isLogin) {
@@ -122,10 +157,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadUser() async {
-    var uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    var doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (mounted) setState(() => userData = doc.data());
+    try {
+      var uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+      var doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) setState(() => userData = doc.data());
+    } catch (e) {
+      debugPrint("loadUser error $e");
+    }
   }
 
   @override
@@ -163,7 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('rooms').snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: goldColor));
                 var rooms = snap.data!.docs.where((d) {
                   if (filter == "ALL") return true;
                   return (d['mode'] ?? '') == filter;
