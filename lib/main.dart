@@ -8,7 +8,11 @@ const goldColor = Color(0xFFFFD700);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+  } catch (e) {
+    debugPrint("Firebase failed: $e");
+  }
   runApp(const ZXFFTourApp());
 }
 
