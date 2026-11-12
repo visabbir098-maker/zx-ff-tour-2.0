@@ -1,176 +1,241 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-const String ADMIN_PASSWORD = "ZXADMIN01674";
-const String APP_NAME = "ZX FF TOUR";
-const Color mainBlack = Color(0xFF0A0A12);
-const Color neonPurple = Color(0xFF7B2FFF);
-const Color neonBlue = Color(0xFF2F7BFF);
-const Color goldColor = Color(0xFFE8B93E);
-const String BKASH_URL = "https://tokenized.sandbox.bka.sh/v1.2.0-beta";
-const String BKASH_USER = "YOUR_BKASH_USERNAME";
-const String BKASH_PASS = "YOUR_BKASH_PASSWORD";
-const String BKASH_APP_KEY = "YOUR_APP_KEY";
-const String BKASH_APP_SECRET = "YOUR_APP_SECRET";
-const String BKASH_MERCHANT_NUMBER = "01XXXXXXXXX";
+const mainBlack = Color(0xFF111111);
+const goldColor = Color(0xFFFFD700);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try { await Firebase.initializeApp(); } catch(e) {}
-  runApp(ZXFFTourApp());
+  await Firebase.initializeApp();
+  runApp(const ZXFFTourApp());
 }
-}
+
 class ZXFFTourApp extends StatelessWidget {
+  const ZXFFTourApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(debugShowCheckedModeBanner: false, title: APP_NAME, theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: mainBlack), home: AuthGate());
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const AuthGate(),
+    );
+  }
 }
-}
+
 class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
   @override
-  Widget build(BuildContext context) => StreamBuilder<User?>(stream: FirebaseAuth.instance.authStateChanges(), builder: (c,s){ if(s.connectionState==ConnectionState.waiting) return Scaffold(body: Center(child: CircularProgressIndicator(color: goldColor))); if(s.hasData) return HomeScreen(); return LoginScreen(); });
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snap.hasData) return const HomeScreen();
+        return const LoginScreen();
+      },
+    );
+  }
 }
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
 }
-class LoginScreen extends StatefulWidget { @override _LoginScreenState createState()=>_LoginScreenState(); }
+
 class _LoginScreenState extends State<LoginScreen> {
-  final emailCtrl=TextEditingController(), passCtrl=TextEditingController(), ffCtrl=TextEditingController();
-  bool isLogin=true, loading=false;
+  final emailCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+  final ffCtrl = TextEditingController();
+  bool isLogin = true;
+  bool loading = false;
+
   @override
-  Widget build(BuildContext context)=>Scaffold(backgroundColor: mainBlack, body: Padding(padding: EdgeInsets.all(20), child: Column(mainAxisAlignment: MainAxisAlignment.center, children:[
-    Text("ZX", style: TextStyle(fontSize:60, fontWeight: FontWeight.bold, color: goldColor)), Text("FF TOUR", style: TextStyle(fontSize:30, fontWeight: FontWeight.bold)), SizedBox(height:30),
-    if(!isLogin) TextField(controller: ffCtrl, decoration: InputDecoration(labelText:"Free Fire Name", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-    if(!isLogin) SizedBox(height:12),
-    TextField(controller: emailCtrl, decoration: InputDecoration(labelText:"Email", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-    SizedBox(height:12),
-    TextField(controller: passCtrl, obscureText:true, decoration: InputDecoration(labelText:"Password", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-    SizedBox(height:20),
-    loading?CircularProgressIndicator(color: goldColor):SizedBox(width:double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor, foregroundColor: Colors.black, padding: EdgeInsets.all(16)), onPressed: _auth, child: Text(isLogin?"LOGIN":"REGISTER", style: TextStyle(fontWeight: FontWeight.bold)))),
-    TextButton(onPressed: ()=>setState(()=>isLogin=!isLogin), child: Text(isLogin?"নতুন? Register করো":"Login করো")),
-  ])));
-  Future<void> _auth() async { setState(()=>loading=true); try{ if(isLogin){ await FirebaseAuth.instance.signInWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); } else { var cred=await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim()); await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({'email':emailCtrl.text.trim(),'ffName':ffCtrl.text.trim(),'balance':0,'zxId':'ZX${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}','createdAt':FieldValue.serverTimestamp()}); } }catch(e){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"))); } setState(()=>loading=false); }
-}
-}
-class HomeScreen extends StatefulWidget { @override _HomeScreenState createState()=>_HomeScreenState(); }
-class _HomeScreenState extends State<HomeScreen> {
-  String filter="ALL"; int tapCount=0; Map<String,dynamic>? userData; Set<String> joinedIds={};
-  @override void initState(){ super.initState(); _loadUser(); }
-  Future<void> _loadUser() async { var uid=FirebaseAuth.instance.currentUser?.uid; if(uid==null) return; var doc=await FirebaseFirestore.instance.collection('users').doc(uid).get(); setState(()=>userData=doc.data()); var j=await FirebaseFirestore.instance.collection('joins').where('uid', isEqualTo: uid).get(); setState(()=>joinedIds=j.docs.map((d)=>(d.data()['matchId'] as String)).toSet()); }
-  @override Widget build(BuildContext context){
-    int balance=userData?['balance']??0; String ffName=userData?['ffName']??"Player"; String zxId=userData?['zxId']??"ZX000";
-    return Scaffold(backgroundColor: mainBlack,
-      appBar: AppBar(backgroundColor: mainBlack, title: GestureDetector(onTap:(){ tapCount++; if(tapCount>=5){ tapCount=0; _adminLogin(context);} }, child: Text(APP_NAME, style: TextStyle(color: goldColor, fontWeight: FontWeight.bold))), actions:[Container(margin: EdgeInsets.all(8), padding: EdgeInsets.symmetric(horizontal:12), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(20)), child: Center(child: Text("৳ $balance", style: TextStyle(color: goldColor, fontWeight: FontWeight.bold)))), IconButton(icon: Icon(Icons.logout), onPressed: ()=>FirebaseAuth.instance.signOut())]),
-      body: Column(children:[
-        Padding(padding: EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[ Text("Welcome Back", style: TextStyle(color: Colors.blueGrey)), Text(ffName, style: TextStyle(fontSize:26, fontWeight: FontWeight.bold)), Text("ZX ID: $zxId • Balance: ৳ $balance", style: TextStyle(color: goldColor)), SizedBox(height:12),
-        Row(children: ["ALL","BR","CS","LW","CUSTOM"].map((t){ bool a=filter==t; return Expanded(child: GestureDetector(onTap: ()=>setState(()=>filter=t), child: Container(margin: EdgeInsets.symmetric(horizontal:3), padding: EdgeInsets.symmetric(vertical:10), decoration: BoxDecoration(gradient: a?LinearGradient(colors:[neonPurple,neonBlue]):null, color: a?null:Colors.white10, borderRadius: BorderRadius.circular(12), border: Border.all(color: goldColor.withOpacity(0.5))), child: Center(child: Text(t, style: TextStyle(fontWeight: FontWeight.bold)))))); }).toList()),
-        ])),
-        Expanded(child: StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').orderBy('createdAt', descending:true).snapshots(), builder:(c,snap){ if(!snap.hasData) return Center(child: CircularProgressIndicator(color: goldColor)); var docs=snap.data!.docs.where((d){ if(filter=="ALL") return true; return (d['type'] as String)==filter; }).toList(); if(docs.isEmpty) return Center(child: Text("কোনো ম্যাচ নাই। Admin অ্যাড করবে।")); return ListView.builder(itemCount: docs.length, itemBuilder:(ctx,i){ var d=docs[i]; var m=d.data() as Map<String,dynamic>; bool alreadyJoined=joinedIds.contains(d.id); return Container(margin: EdgeInsets.symmetric(horizontal:12, vertical:6), padding: EdgeInsets.all(14), decoration: BoxDecoration(gradient: LinearGradient(colors:[Color(0xFF1A1A2E), Color(0xFF0F0F1E)]), borderRadius: BorderRadius.circular(16), border: Border.all(color: goldColor.withOpacity(0.4))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[ Expanded(child: Text("${m['type']} • ${m['title']} - ${m['mode']}", style: TextStyle(fontSize:18, fontWeight: FontWeight.bold, color: goldColor))), Container(padding: EdgeInsets.symmetric(horizontal:8, vertical:4), decoration: BoxDecoration(color: (m['isCancelled']??false)?Colors.red:Colors.green, borderRadius: BorderRadius.circular(8)), child: Text((m['isCancelled']??false)?"CANCELLED":"LIVE", style: TextStyle(fontSize:11, fontWeight: FontWeight.bold)))]),
-          SizedBox(height:8), Text("⏰ ${m['time']} | Slot: ${m['joinedSlots']??0}/${m['totalSlots']}", style: TextStyle(color: Colors.white70)), Text("💰 Entry: ৳${m['entryFee']} | Prize: ৳${m['prize']} | Per Kill: ৳${m['perKill']}"),
-          if((m['roomId']??"").toString().isNotEmpty) Text("Room: ${m['roomId']} | Pass: ${m['roomPass']}", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
-          SizedBox(height:10),
-          SizedBox(width:double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: alreadyJoined?Colors.grey:goldColor, foregroundColor: Colors.black), onPressed: (m['isCancelled']??false)||alreadyJoined?null:() async { var uid=FirebaseAuth.instance.currentUser!.uid; var fresh=await FirebaseFirestore.instance.collection('users').doc(uid).get(); int liveBal=(fresh.data()?['balance']??0) as int; if(liveBal < (m['entryFee']??0)){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ব্যালেন্স কম! Add Money করো"))); return; } await FirebaseFirestore.instance.collection('joins').add({'uid':uid,'matchId':d.id,'time':FieldValue.serverTimestamp()}); await FirebaseFirestore.instance.collection('matches').doc(d.id).update({'joinedSlots': FieldValue.increment(1)}); await FirebaseFirestore.instance.collection('users').doc(uid).update({'balance': FieldValue.increment(-(m['entryFee'] as int))}); _loadUser(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Join হয়ে গেছো!"))); }, child: Text(alreadyJoined?"JOINED ✅":((m['isCancelled']??false)?"Cancelled":"JOIN NOW")))),
-        ])); }); }))),
-      ]),
-      bottomNavigationBar: BottomNavigationBar(backgroundColor: Color(0xFF111122), selectedItemColor: goldColor, unselectedItemColor: Colors.grey, type: BottomNavigationBarType.fixed, currentIndex:2, onTap:(i){ if(i==0||i==4) Navigator.push(context, MaterialPageRoute(builder: (_)=> AddMoneyScreen(balance: balance, onRefresh: _loadUser))); }, items:[ BottomNavigationBarItem(icon: Icon(Icons.diamond), label:"Topup"), BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label:"Results"), BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label:"Play"), BottomNavigationBarItem(icon: Icon(Icons.gamepad), label:"My Matches"), BottomNavigationBarItem(icon: Icon(Icons.person), label:"Profile")]),
-    ;
-  }  
-  void _adminLogin(BuildContext context){ TextEditingController p=TextEditingController(); showDialog(context: context, builder: (_)=> AlertDialog(backgroundColor: Color(0xFF1A1A2E), title: Text("Admin Login", style: TextStyle(color: goldColor)), content: TextField(controller: p, obscureText:true, decoration: InputDecoration(hintText:"Admin Password")), actions:[ TextButton(onPressed: ()=>Navigator.pop(context), child: Text("Cancel")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor), onPressed:(){ if(p.text==ADMIN_PASSWORD){ Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_)=> AdminPanel())); } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("ভুল পাসওয়ার্ড!"))); } }, child: Text("Login", style: TextStyle(color: Colors.black))) ])); }
-}
-}
-class AddMoneyScreen extends StatefulWidget { final int balance; final VoidCallback onRefresh; AddMoneyScreen({required this.balance, required this.onRefresh}); @override _AddMoneyScreenState createState()=>_AddMoneyScreenState(); }
-class _AddMoneyScreenState extends State<AddMoneyScreen> {
-  TextEditingController amtCtrl=TextEditingController(); String method="bKash"; String? token;
-  @override Widget build(BuildContext context)=>Scaffold(backgroundColor: mainBlack, appBar: AppBar(title: Text("Add Money - Real Taka"), backgroundColor: mainBlack), body: Padding(padding: EdgeInsets.all(16), child: Column(children:[
-    Container(padding: EdgeInsets.all(20), width: double.infinity, decoration: BoxDecoration(gradient: LinearGradient(colors:[neonPurple, neonBlue]), borderRadius: BorderRadius.circular(16)), child: Column(children:[ Text("Your Balance"), Text("৳ ${widget.balance}", style: TextStyle(fontSize:32, fontWeight: FontWeight.bold))])),
-    SizedBox(height:20), TextField(controller: amtCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText:"Amount - যেমন 100", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-    SizedBox(height:12), Row(children:[ Expanded(child: _mCard("bKash")), SizedBox(width:10), Expanded(child: _mCard("Nagad")) ]),
-    SizedBox(height:12), Row(children:[50,100,200,500].map((a)=> Expanded(child: GestureDetector(onTap: ()=>setState(()=>amtCtrl.text=a.toString()), child: Container(margin: EdgeInsets.symmetric(horizontal:4), padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(12)), child: Center(child: Text("৳$a")))))).toList()),
-    SizedBox(height:20), SizedBox(width:double.infinity, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor, foregroundColor: Colors.black, padding: EdgeInsets.all(16)), onPressed: _payNow, child: Text("PAY ৳${amtCtrl.text.isEmpty?"0":amtCtrl.text} - $method দিয়ে", style: TextStyle(fontWeight: FontWeight.bold)))),
-    SizedBox(height:12), TextButton(onPressed: _manual, child: Text("Manual TrxID দিয়ে Add Money (Send Money করে)")),
-  ])));
-  Widget _mCard(String n){ bool a=method==n; return GestureDetector(onTap: ()=>setState(()=>method=n), child: Container(padding: EdgeInsets.all(14), decoration: BoxDecoration(color: a?neonPurple:Colors.white10, borderRadius: BorderRadius.circular(14), border: Border.all(color: a?goldColor:Colors.transparent)), child: Center(child: Text(n, style: TextStyle(fontWeight: FontWeight.bold, fontSize:18))))); }
-  Future<void> _payNow() async { int amt=int.tryParse(amtCtrl.text)??0; if(amt<10){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("কমপক্ষে ১০ টাকা"))); return; } if(method=="bKash"){ var tRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/token/grant"), headers:{"Content-Type":"application/json","username":BKASH_USER,"password":BKASH_PASS}, body: jsonEncode({"app_key":BKASH_APP_KEY,"app_secret":BKASH_APP_SECRET})); if(tRes.statusCode!=200){ ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("bKash Merchant তথ্য ঠিক নাই। আগে Merchant বসাও।"))); return; } token=jsonDecode(tRes.body)['id_token']; var cRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/create"), headers:{"Content-Type":"application/json","Authorization":token!,"X-APP-Key":BKASH_APP_KEY}, body: jsonEncode({"mode":"0011","payerReference":FirebaseAuth.instance.currentUser!.uid,"callbackURL":"https://zxfftour.page.link/callback","amount":amt.toString(),"currency":"BDT","intent":"sale","merchantInvoiceNumber":"ZX${DateTime.now().millisecondsSinceEpoch}"})); if(cRes.statusCode!=200) return; var data=jsonDecode(cRes.body); Navigator.push(context, MaterialPageRoute(builder: (_)=> BkashWeb(url: data['bkashURL'], paymentID: data['paymentID'], token: token!, amt: amt, onDone: widget.onRefresh))); } else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Nagad এখন Manual দিয়ে করো"))); } }
-  void _manual(){
-    TextEditingController trx=TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text("Manual - $method"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: mainBlack,
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text("1. $method অ্যাপ খুলো\n2. Send Money: $BKASH_MERCHANT_NUMBER\n3. Amount: ${amtCtrl.text}\n4. TrxID দাও"),
-            SizedBox(height: 12),
-            TextField(controller: trx, decoration: InputDecoration(labelText: "TrxID")),
+            const Text("ZX", style: TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: goldColor)),
+            const SizedBox(height: 20),
+            if (isLogin) TextField(controller: ffCtrl, decoration: const InputDecoration(labelText: "FF Name")),
+            if (isLogin) const SizedBox(height: 12),
+            TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: "Email")),
+            const SizedBox(height: 12),
+            TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Password")),
+            const SizedBox(height: 20),
+            loading
+                ? const CircularProgressIndicator(color: goldColor)
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(onPressed: _auth, child: Text(isLogin ? "Login" : "Register")),
+                  ),
+            TextButton(onPressed: () => setState(() => isLogin = !isLogin), child: Text(isLogin ? "Create Account" : "Already have account? Login")),
           ],
         ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('manual_payments').add({'uid': FirebaseAuth.instance.currentUser!.uid, 'amount': int.tryParse(amtCtrl.text) ?? 0, 'trxId': trx.text, 'method': method, 'status': 'pending', 'time': FieldValue.serverTimestamp()});
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Request গেছে! Admin Approve করলেই টাকা ঢুকবে।")));
-            },
-            child: Text("Submit"),
-          ),
-        ],
       ),
     );
+  }
+
+  Future<void> _auth() async {
+    setState(() => loading = true);
+    try {
+      if (isLogin) {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim());
+      } else {
+        var cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: emailCtrl.text.trim(), password: passCtrl.text.trim());
+        await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({'email': emailCtrl.text.trim(), 'ffName': ffCtrl.text.trim(), 'balance': 0});
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+    if (mounted) setState(() => loading = false);
   }
 }
-class BkashWeb extends StatefulWidget { final String url, paymentID, token; final int amt; final VoidCallback onDone; BkashWeb({required this.url, required this.paymentID, required this.token, required this.amt, required this.onDone}); @override _BkashWebState createState()=>_BkashWebState(); }
-class _BkashWebState extends State<BkashWeb> { late WebViewController c; @override void initState(){ super.initState(); c=WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..setNavigationDelegate(NavigationDelegate(onPageFinished: (url) async { if(url.contains("callback")||url.contains("success")){ var eRes=await http.post(Uri.parse("$BKASH_URL/tokenized/checkout/execute"), headers:{"Content-Type":"application/json","Authorization":widget.token,"X-APP-Key":BKASH_APP_KEY}, body: jsonEncode({"paymentID":widget.paymentID})); if(eRes.statusCode==200 && jsonDecode(eRes.body)['statusCode']=="0000"){ var uid=FirebaseAuth.instance.currentUser!.uid; await FirebaseFirestore.instance.collection('users').doc(uid).update({'balance': FieldValue.increment(widget.amt)}); await FirebaseFirestore.instance.collection('payments').add({'uid':uid,'method':'bKash','amount':widget.amt,'trxId':jsonDecode(eRes.body)['trxID'],'status':'success','time':FieldValue.serverTimestamp()}); widget.onDone(); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ পেমেন্ট সফল! Wallet এ ৳${widget.amt} অ্যাড হয়ে গেছে।"))); } } }))..loadRequest(Uri.parse(widget.url)); } @override Widget build(BuildContext context)=>Scaffold(appBar: AppBar(title: Text("bKash Payment")), body: WebViewWidget(controller: c)); }
 
-class AdminPanel extends StatelessWidget {
-  @override Widget build(BuildContext context)=>Scaffold(appBar: AppBar(title: Text("Admin Panel - ZX FF TOUR"), backgroundColor: Colors.deepPurple), body: ListView(padding: EdgeInsets.all(16), children:[
-    Text("Admin Control - সব তোমার হাতে", style: TextStyle(fontSize:16, fontWeight: FontWeight.bold, color: goldColor)), SizedBox(height:16),
-    _btn(context, "➕ Add New Match", ()=>_addMatch(context)), _btn(context, "❌ Cancel Match", ()=>_cancelMatch(context)), _btn(context, "🔑 Set Room ID & Pass", ()=>_setRoom(context)), _btn(context, "🏆 Give Prize", ()=>_givePrize(context)), _btn(context, "💰 Wallet Control", ()=>_wallet(context)),
-    SizedBox(height:20), Text("Pending Manual Payments - Approve করো:", style: TextStyle(fontWeight: FontWeight.bold)),
-    StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('manual_payments').where('status', isEqualTo:'pending').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return Column(children: s.data!.docs.map((d){ var p=d.data() as Map<String,dynamic>; return ListTile(title: Text("${p['method']} - ৳${p['amount']} - Trx: ${p['trxId']}"), trailing: Row(mainAxisSize: MainAxisSize.min, children:[ IconButton(icon: Icon(Icons.check, color: Colors.green), onPressed: () async { await FirebaseFirestore.instance.collection('users').doc(p['uid']).update({'balance': FieldValue.increment(p['amount'])}); await FirebaseFirestore.instance.collection('manual_payments').doc(d.id).update({'status':'success'}); }), IconButton(icon: Icon(Icons.close, color: Colors.red), onPressed: () async { await FirebaseFirestore.instance.collection('manual_payments').doc(d.id).update({'status':'rejected'}); }) ])); }).toList()); }),
-    SizedBox(height:20), Text("Live Matches:", style: TextStyle(fontWeight: FontWeight.bold)),
-    StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return Column(children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; return ListTile(title: Text("${m['title']} - ${m['mode']}"), subtitle: Text("Fee ${m['entryFee']} | Prize ${m['prize']} | Slot ${m['joinedSlots']}/${m['totalSlots']}")); }).toList()); }),
-  ]));
-  Widget _btn(BuildContext ctx, String t, VoidCallback f)=>Padding(padding: EdgeInsets.only(bottom:10), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: goldColor, foregroundColor: Colors.black, padding: EdgeInsets.all(16)), onPressed: f, child: Text(t, style: TextStyle(fontWeight: FontWeight.bold))));
-  void _addMatch(BuildContext ctx){
-    String type="BR", title="", mode="Solo", time="Today 8:00 PM";
-    int fee=20, prize=500, kill=10, slots=48;
-    showDialog(
-      context: ctx,
-      builder: (_) => AlertDialog(
-        title: Text("Add New Match"),
-        content: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(decoration: InputDecoration(labelText:"Title"), onChanged:(v)=>title=v),
-              TextField(decoration: InputDecoration(labelText:"Type BR/CS/LW/CUSTOM"), onChanged:(v)=>type=v.toUpperCase()),
-              TextField(decoration: InputDecoration(labelText:"Mode"), onChanged:(v)=>mode=v),
-              TextField(decoration: InputDecoration(labelText:"Entry Fee"), keyboardType: TextInputType.number, onChanged:(v)=>fee=int.tryParse(v)??20),
-              TextField(decoration: InputDecoration(labelText:"Prize"), keyboardType: TextInputType.number, onChanged:(v)=>prize=int.tryParse(v)??500),
-              TextField(decoration: InputDecoration(labelText:"Per Kill"), keyboardType: TextInputType.number, onChanged:(v)=>kill=int.tryParse(v)??10),
-              TextField(decoration: InputDecoration(labelText:"Total Slots"), keyboardType: TextInputType.number, onChanged:(v)=>slots=int.tryParse(v)??48),
-              TextField(decoration: InputDecoration(labelText:"Time"), onChanged:(v)=>time=v),
-            ],
-          ),
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String filter = "ALL";
+  int tapCount = 0;
+  Map<String, dynamic>? userData;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    var uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    var doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    if (mounted) setState(() => userData = doc.data());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    int balance = (userData?['balance'] ?? 0) as int;
+    String ffName = (userData?['ffName'] ?? '') as String;
+    return Scaffold(
+      backgroundColor: mainBlack,
+      appBar: AppBar(
+        backgroundColor: mainBlack,
+        title: GestureDetector(
+          onTap: () {
+            tapCount++;
+            if (tapCount >= 5) { tapCount = 0; _adminLogin(context); }
+          },
+          child: Text("ZX FF TOUR - $ffName"),
         ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('matches').add({'title': title.isEmpty?"$type $mode":title,'type':type,'mode':mode,'entryFee':fee,'prize':prize,'perKill':kill,'totalSlots':slots,'joinedSlots':0,'time':time,'roomId':'','roomPass':'','isCancelled':false,'createdAt':FieldValue.serverTimestamp()});
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Match অ্যাড হয়ে গেছে!")));
-            },
-            child: Text("Add Match"),
+        actions: [IconButton(icon: const Icon(Icons.logout), onPressed: () => FirebaseAuth.instance.signOut())],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: ["ALL", "BR", "CS", "LW", "CUSTOM"].map((t) {
+                bool a = filter == t;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(label: Text(t), selected: a, onSelected: (_) => setState(() => filter = t)),
+                );
+              }).toList(),
+            ),
           ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('rooms').snapshots(),
+              builder: (context, snap) {
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                var rooms = snap.data!.docs.where((d) {
+                  if (filter == "ALL") return true;
+                  return (d['mode'] ?? '') == filter;
+                }).toList();
+                if (rooms.isEmpty) return const Center(child: Text("No rooms found"));
+                return ListView.builder(
+                  itemCount: rooms.length,
+                  itemBuilder: (context, i) {
+                    var m = rooms[i].data() as Map<String, dynamic>;
+                    return Card(
+                      child: ListTile(
+                        title: Text("\$${m['time']} | Slot: ${m['joinedSlot']}/${m['totalSlot']}"),
+                        subtitle: Text("Room: ${m['roomId'] ?? ''}"),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xFF111122),
+        selectedItemColor: goldColor,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 2,
+        onTap: (i) {
+          if (i == 0) Navigator.push(context, MaterialPageRoute(builder: (_) => AddMoneyScreen(balance: balance, onRefresh: _loadUser)));
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.diamond), label: "Topup"),
+          BottomNavigationBarItem(icon: Icon(Icons.emoji_events), label: "Results"),
+          BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label: "Play"),
+          BottomNavigationBarItem(icon: Icon(Icons.gamepad), label: "My Matches"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
       ),
     );
   }
-  void _cancelMatch(BuildContext ctx){ showDialog(context: ctx, builder: (_)=> AlertDialog(title: Text("Cancel Match"), content: StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return Column(mainAxisSize: MainAxisSize.min, children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; return ListTile(title: Text("${m['title']}"), onTap: () async { await FirebaseFirestore.instance.collection('matches').doc(d.id).update({'isCancelled':true}); Navigator.pop(ctx); }); }).toList()); }))); }
-  void _setRoom(BuildContext ctx){ showDialog(context: ctx, builder: (_)=> AlertDialog(title: Text("Room ID & Pass"), content: StreamBuilder<QuerySnapshot>(stream: FirebaseFirestore.instance.collection('matches').snapshots(), builder:(c,s){ if(!s.hasData) return CircularProgressIndicator(); return SingleChildScrollView(child: Column(children: s.data!.docs.map((d){ var m=d.data() as Map<String,dynamic>; var idC=TextEditingController(text: m['roomId']??''); var pC=TextEditingController(text: m['roomPass']??''); return ListTile(title: Text(m['title']), subtitle: Column(children:[ TextField(controller: idC, decoration: InputDecoration(labelText:"Room ID")), TextField(controller: pC, decoration: InputDecoration(labelText:"Password"))]), trailing: IconButton(icon: Icon(Icons.save), onPressed: () async { await FirebaseFirestore.instance.collection('matches').doc(d.id).update({'roomId':idC.text,'roomPass':pC.text}); Navigator.pop(ctx); })); }).toList())); }))); }
-  void _givePrize(BuildContext ctx){ ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Prize coming soon"))); }
-  void _wallet(BuildContext ctx){ ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Wallet coming soon"))); }
+
+  void _adminLogin(BuildContext context) {
+    TextEditingController p = TextEditingController();
+    showDialog(context: context, builder: (_) => AlertDialog(title: const Text("Admin Login"), content: TextField(controller: p, obscureText: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))]));
+  }
+}
+
+class AddMoneyScreen extends StatefulWidget {
+  final int balance;
+  final VoidCallback onRefresh;
+  const AddMoneyScreen({super.key, required this.balance, required this.onRefresh});
+  @override
+  State<AddMoneyScreen> createState() => _AddMoneyScreenState();
+}
+
+class _AddMoneyScreenState extends State<AddMoneyScreen> {
+  final amtCtrl = TextEditingController();
+  String method = "Bkash";
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: mainBlack,
+      appBar: AppBar(title: const Text("Add Money")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Text("Balance: ${widget.balance}", style: const TextStyle(fontSize: 22)),
+            const SizedBox(height: 20),
+            TextField(controller: amtCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Amount")),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: () { widget.onRefresh(); Navigator.pop(context); }, child: const Text("Request")),
+          ],
+        ),
+      ),
+    );
+  }
 }
