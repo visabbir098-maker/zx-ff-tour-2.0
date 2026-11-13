@@ -20,9 +20,11 @@ jobs:
         run: |
           cp lib/main.dart /tmp/my_main.dart
           cp pubspec.yaml /tmp/my_pubspec.yaml
+          cp android/app/google-services.json /tmp/google-services.json
           flutter create . --project-name zx_ff_tour --org com.zx.fftour
           cp /tmp/my_main.dart lib/main.dart
           cp /tmp/my_pubspec.yaml pubspec.yaml
+          cp /tmp/google-services.json android/app/google-services.json
           flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
