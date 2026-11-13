@@ -15,7 +15,6 @@ jobs:
         with:
           flutter-version: '3.19.0'
           channel: 'stable'
-          java-version: '17'
       - name: Fix project structure
         run: |
           cp lib/main.dart /tmp/my_main.dart
@@ -26,9 +25,21 @@ jobs:
           cp /tmp/my_main.dart lib/main.dart
           cp /tmp/my_pubspec.yaml pubspec.yaml
           cp /tmp/google-services.json android/app/google-services.json
-          cp -r /tmp/my_res/* android/app/src/main/res/ || echo "no res to restore"
-          echo "id(\"com.google.gms.google-services\") version \"4.4.2\" apply false" >> android/settings.gradle.kts
-          sed -i 's/id("com.android.application")/id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts
+          cp -r /tmp/my_res/. android/app/src/main/res/ || echo "no res to restore"
+          # Firebase plugin - .gradle আর .kts ২টার জন্যই
+          if [ -f android/settings.gradle.kts ]; then
+            echo 'id("com.google.gms.google-services") version "4.4.2" apply false' >> android/settings.gradle.kts
+          fi
+          if [ -f android/settings.gradle ]; then
+            echo "id 'com.google.gms.google-services' version '4.4.2' apply false" >> android/settings.gradle || true
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/id("com.android.application")/id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts || true
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i "s/id 'com.android.application'/id 'com.android.application'\n    id 'com.google.gms.google-services'/" android/app/build.gradle || true
+            sed -i "s/apply plugin: 'com.android.application'/apply plugin: 'com.android.application'\napply plugin: 'com.google.gms.google-services'/" android/app/build.gradle || true
+          fi
           flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
