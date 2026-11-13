@@ -20,26 +20,13 @@ jobs:
           cp lib/main.dart /tmp/my_main.dart
           cp pubspec.yaml /tmp/my_pubspec.yaml
           cp android/app/google-services.json /tmp/google-services.json
-          cp -r android/app/src/main/res /tmp/my_res || echo "no res folder, skip"
           flutter create . --project-name zx_ff_tour --org com.zx.fftour
           cp /tmp/my_main.dart lib/main.dart
           cp /tmp/my_pubspec.yaml pubspec.yaml
           cp /tmp/google-services.json android/app/google-services.json
-          cp -r /tmp/my_res/. android/app/src/main/res/ || echo "no res to restore"
-          # Firebase plugin - .gradle আর .kts ২টার জন্যই
-          if [ -f android/settings.gradle.kts ]; then
-            echo 'id("com.google.gms.google-services") version "4.4.2" apply false' >> android/settings.gradle.kts
-          fi
-          if [ -f android/settings.gradle ]; then
-            echo "id 'com.google.gms.google-services' version '4.4.2' apply false" >> android/settings.gradle || true
-          fi
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/id("com.android.application")/id("com.android.application")\n    id("com.google.gms.google-services")/' android/app/build.gradle.kts || true
-          fi
-          if [ -f android/app/build.gradle ]; then
-            sed -i "s/id 'com.android.application'/id 'com.android.application'\n    id 'com.google.gms.google-services'/" android/app/build.gradle || true
-            sed -i "s/apply plugin: 'com.android.application'/apply plugin: 'com.android.application'\napply plugin: 'com.google.gms.google-services'/" android/app/build.gradle || true
-          fi
+          # Firebase - সঠিক জায়গায়, settings.gradle এ আর হাত দিবো না
+          sed -i "s/dependencies {/dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'/" android/build.gradle || true
+          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
           flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
