@@ -6,6 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 const mainBlack = Color(0xFF111111);
 const goldColor = Color(0xFFFFD700);
 
+// ====== এখানে তোমার bKash নাম্বার বসাও ======
+const String bkashNumber = "01XXXXXXXXX";
+const String bkashName = "ZX FF TOUR";
+const String adminPassword = "zxfftouradmin#@53927";
+
 bool firebaseReady = false;
 
 void main() async {
@@ -38,7 +43,6 @@ class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
   @override
   Widget build(BuildContext context) {
-    // Firebase চালু না হলে আটকে থাকবে না, সরাসরি Login দেখাবে
     if (!firebaseReady) {
       return const LoginScreen(firebaseError: true);
     }
@@ -246,40 +250,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _adminLogin(BuildContext context) {
-    TextEditingController p = TextEditingController();
-    showDialog(context: context, builder: (_) => AlertDialog(title: const Text("Admin Login"), content: TextField(controller: p, obscureText: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))]));
-  }
-}
-
-class AddMoneyScreen extends StatefulWidget {
-  final int balance;
-  final VoidCallback onRefresh;
-  const AddMoneyScreen({super.key, required this.balance, required this.onRefresh});
-  @override
-  State<AddMoneyScreen> createState() => _AddMoneyScreenState();
-}
-
-class _AddMoneyScreenState extends State<AddMoneyScreen> {
-  final amtCtrl = TextEditingController();
-  String method = "Bkash";
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: mainBlack,
-      appBar: AppBar(title: const Text("Add Money")),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text("Balance: ${widget.balance}", style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 20),
-            TextField(controller: amtCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Amount")),
-            const SizedBox(height: 20),
-            ElevatedButton(onPressed: () { widget.onRefresh(); Navigator.pop(context); }, child: const Text("Request")),
-          ],
-        ),
-      ),
-    );
-  }
-}
+  void
