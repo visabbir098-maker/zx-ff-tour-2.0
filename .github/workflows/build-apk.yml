@@ -24,9 +24,23 @@ jobs:
           cp /tmp/my_main.dart lib/main.dart
           cp /tmp/my_pubspec.yaml pubspec.yaml
           cp /tmp/google-services.json android/app/google-services.json
-          # Firebase - সঠিক জায়গায়, settings.gradle এ আর হাত দিবো না
-          sed -i "s/dependencies {/dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'/" android/build.gradle || true
-          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
+          python3 << 'PY'
+          # settings.gradle - plugins block এর ভিতরে ঢুকাও
+          p = "android/settings.gradle"
+          t = open(p).read()
+          if "google-services" not in t:
+              t = t.replace('id "com.android.application"', 'id "com.google.gms.google-services" version "4.4.2" apply false\n    id "com.android.application"')
+              open(p, "w").write(t)
+          # app/build.gradle - plugins block এর ভিতরে ঢুকাও
+          p2 = "android/app/build.gradle"
+          t2 = open(p2).read()
+          if "google-services" not in t2:
+              t2 = t2.replace('id "dev.flutter.flutter-gradle-plugin"', 'id "dev.flutter.flutter-gradle-plugin"\n    id "com.google.gms.google-services"')
+              # যদি kotlin syntax হয়
+              t2 = t2.replace("id 'dev.flutter.flutter-gradle-plugin'", "id 'dev.flutter.flutter-gradle-plugin'\n    id 'com.google.gms.google-services'")
+              open(p2, "w").write(t2)
+          print("Firebase plugin added OK")
+          PY
           flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
